@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DZMM 比赛卡</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="inner">
+    <div class="brand">
+      <span class="logo">DZMM</span><span>比赛卡</span><small>当期创作比赛参赛作品 · 数据来自 dzmm.ai 公开接口</small>
+      <nav class="page-nav">
+        <a href="search.html">搜索</a>
+        <a href="competition.html" class="active">比赛卡</a>
+      </nav>
+    </div>
+    <div class="search-row">
+      <input id="q" type="search" placeholder="在已加载的比赛卡中搜索：名称 / 作者 / 标签 / 简介…" spellcheck="false">
+      <button class="primary" type="button" id="searchBtn">搜索</button>
+    </div>
+    <div id="compInfo"></div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="type-tabs" id="groupTabs"></div>
+
+  <div class="filters">
+    <div class="fgroup">
+      <label for="fSort">排序</label>
+      <select id="fSort">
+        <option value="popular" selected>热门</option>
+        <option value="newest">最新参赛</option>
+      </select>
+    </div>
+    <div class="fgroup">
+      <label for="fDepth">自动抓取</label>
+      <select id="fDepth">
+        <option value="1">1 页（100 条）</option>
+        <option value="2" selected>2 页（200 条）</option>
+        <option value="3">3 页（300 条）</option>
+        <option value="5">5 页（500 条）</option>
+      </select>
+    </div>
+    <div class="fgroup check">
+      <input id="fBlur" type="checkbox" checked>
+      <label for="fBlur">敏感图模糊</label>
+    </div>
+  </div>
+
+  <div class="status">
+    <span id="statusText">正在加载当期比赛信息…</span>
+    <span class="actions">
+      <button id="copyBtn" title="复制匹配结果的名称和链接">复制列表</button>
+      <button id="exportBtn" title="下载 CSV 文件">导出 CSV</button>
+    </span>
+  </div>
+  <div class="error" id="error" style="display:none"></div>
+  <div id="grid" class="grid"></div>
+  <div class="more-wrap"><button id="moreBtn" style="display:none">加载更多结果</button></div>
+  <div class="empty" id="empty" style="display:none"><div class="big">🏆</div><div id="emptyText">当前没有进行中的比赛</div></div>
+
+  <div class="footer">
+    数据实时来自 <a href="https://www.dzmm.ai/?t=competition" target="_blank" rel="noreferrer">dzmm.ai 创作比赛</a> 的公开接口 ・ 点击卡片跳转到原站详情页 ・
+    本扩展只在本地浏览器里运行，不上传任何数据
+  </div>
+</div>
+
+<script src="competition.js"></script>
+</body>
+</html>
