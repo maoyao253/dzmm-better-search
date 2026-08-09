@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DZMM 搜索增强版</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="inner">
+    <div class="brand">
+      <span class="logo">DZMM</span><span>搜索增强版</span><small>比站内搜索更聪明 · 数据来自 dzmm.ai 公开接口</small>
+      <nav class="page-nav">
+        <a href="search.html" class="active">搜索</a>
+        <a href="competition.html">比赛卡</a>
+      </nav>
+    </div>
+    <form class="search-row" id="searchForm" autocomplete="off">
+      <input id="q" type="search" placeholder="搜角色卡：白丝 #病娇 @作者 -猎奇 min:500 rating:4.5 …" spellcheck="false">
+      <button class="primary" type="submit">搜索</button>
+    </form>
+    <div class="history" id="history"></div>
+    <details class="help">
+      <summary>高级搜索语法（点开查看）</summary>
+      <table>
+        <tr><th>写法</th><th>含义</th><th>示例</th></tr>
+        <tr><td><code>词1 词2</code></td><td>同时包含多个关键词（默认全部匹配，可在筛选里改成“任一”）</td><td><code>白丝 病娇</code></td></tr>
+        <tr><td><code>"短语"</code></td><td>精确短语匹配</td><td><code>"校园 老师"</code></td></tr>
+        <tr><td><code>#标签</code></td><td>必须包含该标签</td><td><code>#兄妹</code></td></tr>
+        <tr><td><code>@作者</code></td><td>指定作者/创建者</td><td><code>@丰水梨</code></td></tr>
+        <tr><td><code>-词</code></td><td>排除包含该词的结果</td><td><code>-NTR</code></td></tr>
+        <tr><td><code>min:数字</code></td><td>至少多少赞</td><td><code>min:1000</code></td></tr>
+        <tr><td><code>rating:数字</code></td><td>最低评分</td><td><code>rating:4.5</code></td></tr>
+        <tr><td><code>type:…</code></td><td>类型：card/game/novel/image/tweet/checkpoint/all</td><td><code>type:game</code></td></tr>
+        <tr><td><code>sort:…</code></td><td>排序：smart/popular/recent/most_liked/most_comments/rating</td><td><code>sort:rating</code></td></tr>
+        <tr><td><code>date:…</code></td><td>时间：day/week/month/three_months</td><td><code>date:week</code></td></tr>
+      </table>
+    </details>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="type-tabs" id="typeTabs"></div>
+
+  <div class="filters">
+    <div class="fgroup">
+      <label for="fScope">搜索范围</label>
+      <select id="fScope">
+        <option value="title_tags" selected>标题 + 标签</option>
+        <option value="all">标题 + 标签 + 简介</option>
+        <option value="title">仅标题</option>
+      </select>
+    </div>
+    <div class="fgroup">
+      <label for="fSort">排序</label>
+      <select id="fSort">
+        <option value="smart" selected>智能相关</option>
+        <option value="popular">最热门</option>
+        <option value="recent">最新发布</option>
+        <option value="most_liked">最多赞</option>
+        <option value="most_comments">最多评论</option>
+        <option value="rating">最高评分</option>
+      </select>
+    </div>
+    <div class="fgroup">
+      <label for="fDate">发布时间</label>
+      <select id="fDate">
+        <option value="all" selected>不限</option>
+        <option value="day">24 小时内</option>
+        <option value="week">一周内</option>
+        <option value="month">一个月内</option>
+        <option value="three_months">三个月内</option>
+      </select>
+    </div>
+    <div class="fgroup">
+      <label for="fLang">语言</label>
+      <select id="fLang">
+        <option value="all" selected>不限</option>
+        <option value="zh-CN">中文</option>
+        <option value="en-US">英文</option>
+      </select>
+    </div>
+    <div class="fgroup">
+      <label for="fNsfw">内容</label>
+      <select id="fNsfw">
+        <option value="all" selected>全部（敏感图模糊）</option>
+        <option value="sfw">隐藏敏感内容</option>
+        <option value="nsfw">仅敏感内容</option>
+      </select>
+    </div>
+    <div class="fgroup">
+      <label for="fMinLikes">最少赞</label>
+      <input id="fMinLikes" type="number" min="0" step="100" placeholder="0">
+    </div>
+    <div class="fgroup">
+      <label for="fMinRating">最低评分</label>
+      <input id="fMinRating" type="number" min="0" max="5" step="0.1" placeholder="0">
+    </div>
+    <div class="fgroup check">
+      <input id="fMatchAll" type="checkbox" checked>
+      <label for="fMatchAll">匹配全部关键词</label>
+    </div>
+    <div class="fgroup check">
+      <input id="fSearchDesc" type="checkbox">
+      <label for="fSearchDesc">同时搜索简介（结果更全）</label>
+    </div>
+    <div class="fgroup check">
+      <input id="fHideSystem" type="checkbox" checked>
+      <label for="fHideSystem">隐藏系统内置卡</label>
+    </div>
+    <div class="fgroup">
+      <label for="fDepth">抓取深度</label>
+      <select id="fDepth">
+        <option value="1">1 页（100 条）</option>
+        <option value="2" selected>2 页（200 条）</option>
+        <option value="3">3 页（300 条）</option>
+        <option value="5">5 页（500 条）</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="status" id="status">
+    <span id="statusText">输入关键词开始搜索；也可以直接点“搜索”浏览全部角色卡。</span>
+    <span class="actions">
+      <button id="copyBtn" title="复制匹配结果的名称和链接">复制列表</button>
+      <button id="exportBtn" title="下载 CSV 文件">导出 CSV</button>
+    </span>
+  </div>
+  <div class="error" id="error" style="display:none"></div>
+  <div id="grid" class="grid"></div>
+  <div class="more-wrap"><button id="moreBtn" style="display:none">加载更多结果</button></div>
+  <div class="empty" id="empty" style="display:none"><div class="big">🔍</div><div id="emptyText">没有找到匹配的内容，试试换关键词、减少过滤条件，或点“加载更多”。</div></div>
+
+  <div class="footer">
+    数据实时来自 <a href="https://www.dzmm.ai/search" target="_blank" rel="noreferrer">dzmm.ai</a> 的公开搜索接口 · 点击卡片会跳转到原站详情页 ·
+    本扩展只在你本机浏览器里运行，不上传任何数据
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
