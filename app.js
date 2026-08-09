@@ -26,6 +26,7 @@ const state = {
   finished: false,
   error: null,
   startedAt: 0,
+  autoAuthors: [],
   _views: new Map(),
 };
 
@@ -81,11 +82,34 @@ function parseQuery(raw){
     if (low.startsWith('type:')){ out.opts.type = tok.slice(5).toLowerCase(); continue; }
     if (low.startsWith('lang:')){ out.opts.lang = tok.slice(5).toLowerCase(); continue; }
     if (tok.startsWith('#') && tok.length > 1){ out.tags.push(tok.slice(1).toLowerCase()); continue; }
-    if (tok.startsWith('@') && tok.length > 1){ out.creators.push(tok.slice(1).toLowerCase()); continue; }
+    if (tok.startsWith('@') && tok.length > 1){ out.creators.push(tok.slice(1)); continue; }
     if (tok.startsWith('-') && tok.length > 1){ out.excludes.push(tok.slice(1).toLowerCase()); continue; }
     if (tok) out.terms.push(tok.toLowerCase());
   }
   return out;
+}
+
+/* 去掉扩展自己处理的语法（@作者 / #标签 / -排除 / min: / rating: 等），
+   避免把带 @ 的原始查询直接发给 dzmm 接口导致搜不到内容 */
+function serverQueryFor(raw){
+  const tokens = String(raw || '').match(/"[^"]*"|\S+/g) || [];
+  const kept = [];
+  for (const tok of tokens){
+    if (tok.startsWith('"') && tok.endsWith('"') && tok.length >= 2){ kept.push(tok); continue; }
+    const low = tok.toLowerCase();
+    if (low.startsWith('min:') || low.startsWith('rating:') || low.startsWith('date:') ||
+        low.startsWith('sort:') || low.startsWith('type:') || low.startsWith('lang:')) continue;
+    if (tok.startsWith('#') && tok.length > 1) continue;
+    if (tok.startsWith('-') && tok.length > 1) continue;
+    if (tok.startsWith('@') && tok.length > 1) continue;
+    kept.push(tok);
+  }
+  return kept.join(' ');
+}
+
+function isSingleBareTerm(s){
+  const t = String(s || '').trim();
+  return !!t && !/\s/.test(t) && !t.startsWith('"') && !t.startsWith("'");
 }
 
 function normalizeType(v){
@@ -253,7 +277,10 @@ function passesFilters(item, view, parsed){
     if (!tagText.some(t => t.includes(tag) || tag.includes(t))) return false;
   }
   for (const cr of parsed.creators){
-    if (!termHits(item._text, cr)) return false;
+    if (!termHits(view.author, cr)) return false;
+  }
+  for (const aa of state.autoAuthors){
+    if (!termHits(view.author, aa)) return false;
   }
   return true;
 }
@@ -322,9 +349,18 @@ function buildStreams(parsed){
   const type = normalizeType(parsed.opts.type) || f.type;
   const meta = TYPE_META[type];
   const streams = [];
-  const base = { q: state.query, limit: PAGE_LIMIT };
+  let serverQ = serverQueryFor(state.query);
+  let scope = parsed.opts.scope || f.scope;
+  if (parsed.creators.length){
+    // 作者名可能出现在简介里，必须用全范围抓取；纯 @作者 查询则直接用作者名搜
+    scope = 'all';
+    if (!serverQ.trim()) serverQ = parsed.creators.join(' ');
+  } else if (isSingleBareTerm(serverQ)){
+    // 单个词有可能是作者名，用全范围抓取，抓完再自动按作者过滤
+    scope = 'all';
+  }
+  const base = { q: serverQ, limit: PAGE_LIMIT };
   if (meta.scope){
-    const scope = parsed.opts.scope || f.scope;
     base.type = meta.type;
     if (f.sort && f.sort !== 'smart') base.sort = f.sort;
     if (f.date !== 'all') base.dateRange = f.date;
@@ -335,7 +371,7 @@ function buildStreams(parsed){
     }
   } else if (meta.type === 'combined'){
     streams.push({
-      params: { q: state.query, types: 'cards,tweets,checkpoints,galleries,gamefy', sort: 'recent', excludeForumTopics: 'true', limit: PAGE_LIMIT },
+      params: { q: serverQ, types: 'cards,tweets,checkpoints,galleries,gamefy', sort: 'recent', excludeForumTopics: 'true', limit: PAGE_LIMIT },
       cursor: null, hasMore: true
     });
   } else {
@@ -404,6 +440,7 @@ async function runSearch(){
   state.query = q;
   state.items.clear();
   state._views.clear();
+  state.autoAuthors = [];
   state.finished = false;
   state.error = null;
   state.loadedPages = 0;
@@ -443,9 +480,28 @@ async function runSearch(){
     if (sid !== state.searchId) return;
   }
   if (sid !== state.searchId) return;
+  detectAutoAuthors(parsed);
   state.finished = true;
   renderStatus();
   render();
+}
+
+function detectAutoAuthors(parsed){
+  state.autoAuthors = [];
+  if (parsed.creators.length) return;
+  const cleaned = serverQueryFor(state.query).trim();
+  if (!cleaned || /\s/.test(cleaned) || cleaned.startsWith('"') || cleaned.startsWith("'")) return;
+  const low = cleaned.toLowerCase();
+  const found = new Map();
+  for (const item of state.items.values()){
+    const d = item.data || {};
+    const id = item.authorId || d.userId;
+    const name = (item.author && item.author.fullName) || d.creatorFullName || d.creator || '';
+    if (id && name && name.toLowerCase().includes(low)){
+      if (!found.has(id)) found.set(id, name);
+    }
+  }
+  state.autoAuthors = [...found.values()];
 }
 
 async function loadMore(){
@@ -476,6 +532,7 @@ async function loadMore(){
   if (sid !== state.searchId) return;
   state.finished = true;
   $('moreBtn').disabled = false;
+  detectAutoAuthors(parseQuery(state.query));
   renderStatus();
   render();
 }
@@ -508,14 +565,22 @@ function renderStatus(){
   } else {
     const parsed = parseQuery(state.query);
     const matched = matchedItems(parsed).length;
-    el.innerHTML = `已抓取 <b>${state.items.size}</b> 条，匹配 <b>${matched}</b> 条（用时 ${elapsed} 秒）`;
+    if (state.autoAuthors.length){
+      el.innerHTML = `已按作者「<b>${esc(state.autoAuthors.join('、'))}</b>」过滤，匹配 <b>${matched}</b> 条 · ` +
+        `<a href="javascript:void(0)" class="cancel-auto">取消过滤</a>（用时 ${elapsed} 秒）`;
+    } else {
+      el.innerHTML = `已抓取 <b>${state.items.size}</b> 条，匹配 <b>${matched}</b> 条（用时 ${elapsed} 秒）`;
+    }
   }
+  const cancelLink = el.querySelector && el.querySelector('.cancel-auto');
+  if (cancelLink) cancelLink.onclick = () => { state.autoAuthors = []; renderStatus(); render(); };
 }
 
 function render(){
   const parsed = parseQuery(state.query);
   const arr = matchedItems(parsed);
   const grid = $('grid');
+  grid.className = 'grid';
   const frag = document.createDocumentFragment();
   const f = getFilters();
   const blurNsfw = f.nsfw === 'all';
@@ -689,7 +754,8 @@ $('copyBtn').onclick = async () => {
 $('exportBtn').onclick = () => {
   const lines = exportLines();
   if (!lines.length){ alert('当前没有匹配结果可导出。'); return; }
-  const csv = '\uFEFF名称,赞数,评论,评分,链接,标签\n' + lines.map(l => {
+  const header = '\uFEFF作者,粉丝数,关注数,链接\n';
+  const csv = header + lines.map(l => {
     const c = l.split('\t');
     return c.map(x => '"' + String(x).replace(/"/g, '""') + '"').join(',');
   }).join('\n');

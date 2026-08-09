@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DZMM 搜索增强版</title>
 <style>
+
 :root{
   --bg:#0f1115; --panel:#171a21; --panel2:#1d212b; --border:#2a2f3a;
   --text:#e8eaf0; --muted:#9aa3b2; --accent:#7c5cff; --accent2:#3ea6ff;
@@ -30,8 +31,27 @@ a{color:var(--accent2);text-decoration:none}
 header{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
 header .inner{max-width:1180px;margin:0 auto;padding:12px 18px}
 .brand{display:flex;align-items:baseline;gap:10px;font-size:20px;font-weight:800}
+.brand{flex-wrap:wrap}
 .brand .logo{background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
 .brand small{font-size:12px;color:var(--muted);font-weight:500}
+.page-nav{margin-left:auto;display:flex;gap:6px;align-items:center}
+.page-nav a{
+  font-size:12.5px;font-weight:600;color:var(--muted);padding:6px 13px;border-radius:999px;
+  border:1px solid var(--border);transition:color .15s, border-color .15s, background .15s;
+}
+.page-nav a:hover{color:var(--text);border-color:var(--accent)}
+.page-nav a.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border-color:transparent}
+.comp-banner{
+  margin-top:12px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
+  padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px 18px;align-items:baseline;
+  font-size:13px;box-shadow:var(--shadow);
+}
+.comp-banner .comp-title{font-size:16px;font-weight:800}
+.comp-banner .comp-status{font-size:12px;font-weight:700;padding:2px 10px;border-radius:999px;background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn)}
+.comp-banner .comp-status.active{background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good)}
+.comp-banner .comp-status.judging{background:color-mix(in srgb,var(--accent2) 16%,transparent);color:var(--accent2)}
+.comp-banner .comp-muted{color:var(--muted);font-size:12.5px}
+.tab small{font-size:10.5px;opacity:.85;margin-left:2px;font-weight:600}
 .search-row{display:flex;gap:8px;margin-top:10px}
 #q{
   flex:1;min-width:0;padding:12px 16px;border-radius:12px;border:1px solid var(--border);
@@ -111,39 +131,25 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .footer{margin-top:50px;text-align:center;font-size:12px;color:var(--muted);border-top:1px solid var(--border);padding-top:18px}
 .footer a{color:var(--muted);text-decoration:underline}
 @media (max-width:640px){
-  .wrap{padding:12px 10px 70px}
-  header .inner{padding:10px 12px}
-  .brand{flex-wrap:wrap;font-size:17px;row-gap:2px}
-  .brand small{width:100%;font-size:11px}
-  .search-row{flex-wrap:nowrap}
-  #q{font-size:16px;padding:11px 13px}
-  .primary{padding:11px 18px}
-  .filters{padding:12px;gap:10px 12px}
-  .fgroup{flex:1 1 calc(50% - 12px);min-width:0}
-  .fgroup.check{flex:1 1 100%}
-  .fgroup select{width:100%;font-size:15px}
-  .fgroup input[type=number]{width:100%;font-size:15px}
-  .type-tabs{gap:7px;margin-top:14px}
-  .tab{padding:9px 13px;font-size:14px}
   .grid{grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:10px}
-  .card:hover{transform:none}
-  .body{padding:9px 10px 11px}
-  .name{font-size:14px}
-  .desc{-webkit-line-clamp:2}
-  .help table{display:block;overflow-x:auto}
-  .status{font-size:13px}
-  .status .actions{margin-left:0;width:100%;flex-wrap:wrap}
-  .more-wrap button{width:100%;padding:14px}
-  .footer{font-size:11.5px}
+  .status .actions{margin-left:0;width:100%}
+  .filters{gap:10px}
+  .fgroup input[type=number]{width:80px}
 }
 </style>
 </head>
 <body>
 <header>
   <div class="inner">
-    <div class="brand"><span class="logo">DZMM</span><span>搜索增强版</span><small>比站内搜索更聪明 · 数据来自 dzmm.ai 公开接口</small></div>
+    <div class="brand">
+      <span class="logo">DZMM</span><span>搜索增强版</span><small>比站内搜索更聪明 · 数据来自 dzmm.ai 公开接口</small>
+      <nav class="page-nav">
+        <a href="search.html" class="active">搜索</a>
+        <a href="competition.html">比赛卡</a>
+      </nav>
+    </div>
     <form class="search-row" id="searchForm" autocomplete="off">
-      <input id="q" type="search" placeholder="搜角色卡：白丝 #病娇 @作者 -猎奇 min:500 rating:4.5 …" spellcheck="false">
+      <input id="q" type="search" placeholder="搜角色卡：白丝 #病娇 @作者 -猎奇 min:500 rating:4.5 · 直接输入作者名（如 猫妖）自动只看 TA 的卡" spellcheck="false">
       <button class="primary" type="submit">搜索</button>
     </form>
     <div class="history" id="history"></div>
@@ -154,7 +160,8 @@ button:disabled{opacity:.5;cursor:not-allowed}
         <tr><td><code>词1 词2</code></td><td>同时包含多个关键词（默认全部匹配，可在筛选里改成“任一”）</td><td><code>白丝 病娇</code></td></tr>
         <tr><td><code>"短语"</code></td><td>精确短语匹配</td><td><code>"校园 老师"</code></td></tr>
         <tr><td><code>#标签</code></td><td>必须包含该标签</td><td><code>#兄妹</code></td></tr>
-        <tr><td><code>@作者</code></td><td>指定作者/创建者</td><td><code>@丰水梨</code></td></tr>
+        <tr><td><code>@作者</code></td><td>指定作者/创建者</td><td><code>@猫妖</code></td></tr>
+        <tr><td>直接输入作者名</td><td>自动识别为作者，只显示 TA 的卡（可点“取消过滤”）</td><td>猫妖</td></tr>
         <tr><td><code>-词</code></td><td>排除包含该词的结果</td><td><code>-NTR</code></td></tr>
         <tr><td><code>min:数字</code></td><td>至少多少赞</td><td><code>min:1000</code></td></tr>
         <tr><td><code>rating:数字</code></td><td>最低评分</td><td><code>rating:4.5</code></td></tr>
@@ -260,7 +267,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
 
   <div class="footer">
     数据实时来自 <a href="https://www.dzmm.ai/search" target="_blank" rel="noreferrer">dzmm.ai</a> 的公开搜索接口 · 点击卡片会跳转到原站详情页 ·
-    本工具仅在你本机浏览器里运行，不上传任何数据
+    本扩展只在你本机浏览器里运行，不上传任何数据
   </div>
 </div>
 
@@ -292,6 +299,7 @@ const state = {
   finished: false,
   error: null,
   startedAt: 0,
+  autoAuthors: [],
   _views: new Map(),
 };
 
@@ -347,11 +355,34 @@ function parseQuery(raw){
     if (low.startsWith('type:')){ out.opts.type = tok.slice(5).toLowerCase(); continue; }
     if (low.startsWith('lang:')){ out.opts.lang = tok.slice(5).toLowerCase(); continue; }
     if (tok.startsWith('#') && tok.length > 1){ out.tags.push(tok.slice(1).toLowerCase()); continue; }
-    if (tok.startsWith('@') && tok.length > 1){ out.creators.push(tok.slice(1).toLowerCase()); continue; }
+    if (tok.startsWith('@') && tok.length > 1){ out.creators.push(tok.slice(1)); continue; }
     if (tok.startsWith('-') && tok.length > 1){ out.excludes.push(tok.slice(1).toLowerCase()); continue; }
     if (tok) out.terms.push(tok.toLowerCase());
   }
   return out;
+}
+
+/* 去掉扩展自己处理的语法（@作者 / #标签 / -排除 / min: / rating: 等），
+   避免把带 @ 的原始查询直接发给 dzmm 接口导致搜不到内容 */
+function serverQueryFor(raw){
+  const tokens = String(raw || '').match(/"[^"]*"|\S+/g) || [];
+  const kept = [];
+  for (const tok of tokens){
+    if (tok.startsWith('"') && tok.endsWith('"') && tok.length >= 2){ kept.push(tok); continue; }
+    const low = tok.toLowerCase();
+    if (low.startsWith('min:') || low.startsWith('rating:') || low.startsWith('date:') ||
+        low.startsWith('sort:') || low.startsWith('type:') || low.startsWith('lang:')) continue;
+    if (tok.startsWith('#') && tok.length > 1) continue;
+    if (tok.startsWith('-') && tok.length > 1) continue;
+    if (tok.startsWith('@') && tok.length > 1) continue;
+    kept.push(tok);
+  }
+  return kept.join(' ');
+}
+
+function isSingleBareTerm(s){
+  const t = String(s || '').trim();
+  return !!t && !/\s/.test(t) && !t.startsWith('"') && !t.startsWith("'");
 }
 
 function normalizeType(v){
@@ -519,7 +550,10 @@ function passesFilters(item, view, parsed){
     if (!tagText.some(t => t.includes(tag) || tag.includes(t))) return false;
   }
   for (const cr of parsed.creators){
-    if (!termHits(item._text, cr)) return false;
+    if (!termHits(view.author, cr)) return false;
+  }
+  for (const aa of state.autoAuthors){
+    if (!termHits(view.author, aa)) return false;
   }
   return true;
 }
@@ -588,9 +622,18 @@ function buildStreams(parsed){
   const type = normalizeType(parsed.opts.type) || f.type;
   const meta = TYPE_META[type];
   const streams = [];
-  const base = { q: state.query, limit: PAGE_LIMIT };
+  let serverQ = serverQueryFor(state.query);
+  let scope = parsed.opts.scope || f.scope;
+  if (parsed.creators.length){
+    // 作者名可能出现在简介里，必须用全范围抓取；纯 @作者 查询则直接用作者名搜
+    scope = 'all';
+    if (!serverQ.trim()) serverQ = parsed.creators.join(' ');
+  } else if (isSingleBareTerm(serverQ)){
+    // 单个词有可能是作者名，用全范围抓取，抓完再自动按作者过滤
+    scope = 'all';
+  }
+  const base = { q: serverQ, limit: PAGE_LIMIT };
   if (meta.scope){
-    const scope = parsed.opts.scope || f.scope;
     base.type = meta.type;
     if (f.sort && f.sort !== 'smart') base.sort = f.sort;
     if (f.date !== 'all') base.dateRange = f.date;
@@ -601,7 +644,7 @@ function buildStreams(parsed){
     }
   } else if (meta.type === 'combined'){
     streams.push({
-      params: { q: state.query, types: 'cards,tweets,checkpoints,galleries,gamefy', sort: 'recent', excludeForumTopics: 'true', limit: PAGE_LIMIT },
+      params: { q: serverQ, types: 'cards,tweets,checkpoints,galleries,gamefy', sort: 'recent', excludeForumTopics: 'true', limit: PAGE_LIMIT },
       cursor: null, hasMore: true
     });
   } else {
@@ -670,6 +713,7 @@ async function runSearch(){
   state.query = q;
   state.items.clear();
   state._views.clear();
+  state.autoAuthors = [];
   state.finished = false;
   state.error = null;
   state.loadedPages = 0;
@@ -709,9 +753,28 @@ async function runSearch(){
     if (sid !== state.searchId) return;
   }
   if (sid !== state.searchId) return;
+  detectAutoAuthors(parsed);
   state.finished = true;
   renderStatus();
   render();
+}
+
+function detectAutoAuthors(parsed){
+  state.autoAuthors = [];
+  if (parsed.creators.length) return;
+  const cleaned = serverQueryFor(state.query).trim();
+  if (!cleaned || /\s/.test(cleaned) || cleaned.startsWith('"') || cleaned.startsWith("'")) return;
+  const low = cleaned.toLowerCase();
+  const found = new Map();
+  for (const item of state.items.values()){
+    const d = item.data || {};
+    const id = item.authorId || d.userId;
+    const name = (item.author && item.author.fullName) || d.creatorFullName || d.creator || '';
+    if (id && name && name.toLowerCase().includes(low)){
+      if (!found.has(id)) found.set(id, name);
+    }
+  }
+  state.autoAuthors = [...found.values()];
 }
 
 async function loadMore(){
@@ -742,6 +805,7 @@ async function loadMore(){
   if (sid !== state.searchId) return;
   state.finished = true;
   $('moreBtn').disabled = false;
+  detectAutoAuthors(parseQuery(state.query));
   renderStatus();
   render();
 }
@@ -774,14 +838,22 @@ function renderStatus(){
   } else {
     const parsed = parseQuery(state.query);
     const matched = matchedItems(parsed).length;
-    el.innerHTML = `已抓取 <b>${state.items.size}</b> 条，匹配 <b>${matched}</b> 条（用时 ${elapsed} 秒）`;
+    if (state.autoAuthors.length){
+      el.innerHTML = `已按作者「<b>${esc(state.autoAuthors.join('、'))}</b>」过滤，匹配 <b>${matched}</b> 条 · ` +
+        `<a href="javascript:void(0)" class="cancel-auto">取消过滤</a>（用时 ${elapsed} 秒）`;
+    } else {
+      el.innerHTML = `已抓取 <b>${state.items.size}</b> 条，匹配 <b>${matched}</b> 条（用时 ${elapsed} 秒）`;
+    }
   }
+  const cancelLink = el.querySelector && el.querySelector('.cancel-auto');
+  if (cancelLink) cancelLink.onclick = () => { state.autoAuthors = []; renderStatus(); render(); };
 }
 
 function render(){
   const parsed = parseQuery(state.query);
   const arr = matchedItems(parsed);
   const grid = $('grid');
+  grid.className = 'grid';
   const frag = document.createDocumentFragment();
   const f = getFilters();
   const blurNsfw = f.nsfw === 'all';
@@ -955,7 +1027,8 @@ $('copyBtn').onclick = async () => {
 $('exportBtn').onclick = () => {
   const lines = exportLines();
   if (!lines.length){ alert('当前没有匹配结果可导出。'); return; }
-  const csv = '\uFEFF名称,赞数,评论,评分,链接,标签\n' + lines.map(l => {
+  const header = '\uFEFF作者,粉丝数,关注数,链接\n';
+  const csv = header + lines.map(l => {
     const c = l.split('\t');
     return c.map(x => '"' + String(x).replace(/"/g, '""') + '"').join(',');
   }).join('\n');
@@ -988,6 +1061,9 @@ if (urlQ){
 } else if (!qEl.value){
   runSearch();
 }
+
+
+try { parent.postMessage({ type: "dzmm-search-ready" }, "*"); } catch (e) {}
 </script>
 </body>
 </html>
