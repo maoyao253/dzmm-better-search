@@ -22,6 +22,14 @@
 3. Edge：打开 `edge://extensions`，开启左侧「开发人员模式」，点击「加载解压缩的扩展」并选择本文件夹
 4. 打开 https://www.dzmm.ai ，右下角就会出现「增强搜索」按钮
 
+## 网页版（无需安装）
+
+不想安装扩展也可以直接打开网页版入口页，页面会自动检测并推荐当前可用的地址：
+
+- 网页版：[page-asserts.godsbee.com/pages/ntglefa1/index.html](https://page-asserts.godsbee.com/pages/ntglefa1/index.html)
+
+仓库 `web/` 目录里也保留了可离线打开的单文件网页版（桌面版 / 移动版）。
+
 ## 搜索语法示例
 
 | 输入 | 效果 |
