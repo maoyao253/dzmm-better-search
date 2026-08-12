@@ -82,6 +82,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
 }
 .fgroup select:focus,.fgroup input:focus{border-color:var(--accent)}
 .fgroup input[type=number]{width:92px}
+.fgroup.local-filter input{width:230px}
 .fgroup.check{flex-direction:row;align-items:center;gap:7px;font-size:13px}
 .fgroup.check input{accent-color:var(--accent)}
 .type-tabs{display:flex;flex-wrap:wrap;gap:6px;margin-top:18px}
@@ -128,4 +129,5 @@ button:disabled{opacity:.5;cursor:not-allowed}
   .status .actions{margin-left:0;width:100%}
   .filters{gap:10px}
   .fgroup input[type=number]{width:80px}
+  .fgroup.local-filter input{width:100%}
 }

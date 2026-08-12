@@ -33,6 +33,12 @@ const state = {
 const $ = id => document.getElementById(id);
 const qEl = $('q');
 
+/* 会话级页缓存：同一查询/同一页重复请求直接命中，不重复打接口 */
+let pageCache = new Map();
+const PAGE_CACHE_MAX = 150;
+/* 基础抓取间隔，遇 429 会自动调大，成功后慢慢回落 */
+let pageDelay = 150;
+
 /* ---------- utilities ---------- */
 function esc(s){
   return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -319,10 +325,12 @@ function scoreItem(item, view, parsed){
 }
 function matchedItems(parsed){
   const f = getFilters();
+  const locals = localFilterTerms();
   const arr = [];
   for (const item of state.items.values()){
     const view = ensureView(item);
     if (!passesFilters(item, view, parsed)) continue;
+    if (locals.some(t => !termHits(item._text, t))) continue;
     const score = scoreItem(item, view, parsed);
     if (score === -Infinity) continue;
     arr.push({ item, view, score });
@@ -341,6 +349,12 @@ function matchedItems(parsed){
     }
   });
   return arr;
+}
+
+function localFilterTerms(){
+  const el = $('fLocal');
+  if (!el) return [];
+  return String(el.value || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
 }
 
 /* ---------- API ---------- */
@@ -384,15 +398,22 @@ function buildStreams(parsed){
   return { streams, type };
 }
 
-async function fetchPage(stream){
+async function fetchPage(stream, signal){
   const params = { ...stream.params };
   if (stream.cursor != null) params.cursor = stream.cursor;
   const payload = { 0: { json: params } };
   const url = API + '?batch=1&input=' + encodeURIComponent(JSON.stringify(payload));
+  const cached = pageCache.get(url);
+  if (cached){
+    stream.cursor = cached.nextCursor != null ? cached.nextCursor : (stream.cursor || 0) + cached.results.length;
+    stream.hasMore = cached.hasMore;
+    return cached.results;
+  }
   let res;
   try {
-    res = await fetch(url, { credentials: 'omit', headers: { accept: 'application/json' } });
+    res = await fetch(url, { credentials: 'omit', headers: { accept: 'application/json' }, signal });
   } catch (e){
+    if (e && e.name === 'AbortError') throw e;
     throw new Error('网络请求失败，请检查网络或稍后重试');
   }
   let body = null;
@@ -405,20 +426,27 @@ async function fetchPage(stream){
   }
   const data = body[0].result.data.json;
   const results = data.results || [];
+  let nextCursor = null;
   if (data.nextCursor != null){
-    stream.cursor = data.nextCursor;
-    stream.hasMore = !!data.nextCursor;
+    nextCursor = data.nextCursor;
+    stream.cursor = nextCursor;
+    stream.hasMore = !!nextCursor;
   } else {
     stream.cursor = (stream.cursor || 0) + results.length;
     stream.hasMore = results.length >= PAGE_LIMIT;
   }
+  if (pageCache.size >= PAGE_CACHE_MAX){
+    const oldest = pageCache.keys().next().value;
+    if (oldest != null) pageCache.delete(oldest);
+  }
+  pageCache.set(url, { results, nextCursor, hasMore: stream.hasMore });
   return results;
 }
 
-async function fetchStream(stream, pages, sid, onPage){
+async function fetchStream(stream, pages, sid, onPage, signal){
   for (let i = 0; i < pages; i++){
-    if (sid !== state.searchId) return;
-    const results = await fetchPage(stream);
+    if (sid !== state.searchId || signal.aborted) return;
+    const results = await fetchPage(stream, signal);
     let added = 0;
     for (const r of results){
       if (!state.items.has(r.uniqueId)){
@@ -428,8 +456,27 @@ async function fetchStream(stream, pages, sid, onPage){
     }
     onPage && onPage(added, i + 1, stream);
     if (!stream.hasMore) break;
-    await sleep(120);
+    await sleep(pageDelay);
   }
+}
+
+/* 并行抓取多条流，但最多同时 2 条，避免把公开接口打成限流 */
+async function runStreams(list, pages, sid, signal, onPage){
+  const queue = list.slice();
+  const workers = [];
+  const count = Math.min(2, queue.length);
+  for (let i = 0; i < count; i++){
+    workers.push((async () => {
+      while (queue.length){
+        const stream = queue.shift();
+        if (sid !== state.searchId || signal.aborted) return;
+        await fetchStream(stream, pages, sid, onPage, signal);
+      }
+    })());
+  }
+  const settled = await Promise.allSettled(workers);
+  const failed = settled.find(r => r.status === 'rejected');
+  if (failed) throw failed.reason;
 }
 
 /* ---------- search execution ---------- */
@@ -437,6 +484,9 @@ async function runSearch(){
   const q = qEl.value.trim();
   state.searchId++;
   const sid = state.searchId;
+  if (state.abort) state.abort.abort();
+  const abort = new AbortController();
+  state.abort = abort;
   state.query = q;
   state.items.clear();
   state._views.clear();
@@ -459,25 +509,26 @@ async function runSearch(){
   render();
   $('moreBtn').style.display = 'none';
 
-  for (const stream of streams){
-    try {
-      await fetchStream(stream, getFilters().depth, sid, () => {
-        state.loadedPages++;
-        renderStatus();
-        render();
-      });
-    } catch (err){
-      if (sid !== state.searchId) return;
-      state.error = err.rateLimit
-        ? '请求太频繁，被接口限流了。请等 30~60 秒再搜，或把“抓取深度”调小。'
-        : '加载失败：' + err.message;
-      $('error').style.display = 'block';
-      $('error').textContent = state.error;
+  try {
+    await runStreams(streams, getFilters().depth, sid, abort.signal, () => {
+      state.loadedPages++;
       renderStatus();
       render();
-      return;
+    });
+  } catch (err){
+    if (sid !== state.searchId || err.name === 'AbortError') return;
+    if (err.rateLimit){
+      pageDelay = Math.min(Math.round(pageDelay * 1.8), 3000);
+      state.error = '请求太频繁，被接口限流了。请等 30~60 秒再搜，或把“抓取深度”调小。';
+    } else {
+      pageDelay = Math.max(150, Math.round(pageDelay * 0.7));
+      state.error = '加载失败：' + err.message;
     }
-    if (sid !== state.searchId) return;
+    $('error').style.display = 'block';
+    $('error').textContent = state.error;
+    renderStatus();
+    render();
+    return;
   }
   if (sid !== state.searchId) return;
   detectAutoAuthors(parsed);
@@ -508,26 +559,30 @@ async function loadMore(){
   if (!state.streams.length) return;
   state.finished = false;
   const sid = state.searchId;
+  if (state.abort) state.abort.abort();
+  const abort = new AbortController();
+  state.abort = abort;
   $('moreBtn').disabled = true;
-  for (const stream of state.streams){
-    if (!stream.hasMore) continue;
-    try {
-      await fetchStream(stream, 1, sid, () => {
-        state.loadedPages++;
-        renderStatus();
-        render();
-      });
-    } catch (err){
-      if (sid !== state.searchId) return;
-      state.error = err.rateLimit
-        ? '请求太频繁，被接口限流了。请等 30~60 秒再试。'
-        : '加载失败：' + err.message;
-      $('error').style.display = 'block';
-      $('error').textContent = state.error;
+  try {
+    await runStreams(state.streams.filter(s => s.hasMore), 1, sid, abort.signal, () => {
+      state.loadedPages++;
       renderStatus();
       render();
-      return;
+    });
+  } catch (err){
+    if (sid !== state.searchId || err.name === 'AbortError') return;
+    if (err.rateLimit){
+      pageDelay = Math.min(Math.round(pageDelay * 1.8), 3000);
+      state.error = '请求太频繁，被接口限流了。请等 30~60 秒再试。';
+    } else {
+      pageDelay = Math.max(150, Math.round(pageDelay * 0.7));
+      state.error = '加载失败：' + err.message;
     }
+    $('error').style.display = 'block';
+    $('error').textContent = state.error;
+    renderStatus();
+    render();
+    return;
   }
   if (sid !== state.searchId) return;
   state.finished = true;
@@ -777,6 +832,7 @@ for (const id of ['fScope', 'fSearchDesc', 'fDepth']){
 for (const id of ['fSort', 'fDate', 'fLang', 'fNsfw', 'fMinLikes', 'fMinRating', 'fMatchAll', 'fHideSystem']){
   $(id).addEventListener('change', () => { renderStatus(); render(); });
 }
+$('fLocal').addEventListener('input', () => { renderStatus(); render(); });
 
 /* ---------- init ---------- */
 renderTabs();
